@@ -1,0 +1,5 @@
+{
+  "name": "The Distributed System of Us: Server Sync Edition",
+  "description": "A high-availability Valentine's console for Cloud Engineers, featuring server-to-server sync visualization and Gemini-powered LoveOps auditing.",
+  "requestFramePermissions": []
+}

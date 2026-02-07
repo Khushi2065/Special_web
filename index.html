@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise LoveOps | Server-to-Server Sync</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Outfit:wght@300;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #030508;
+            --server-a: #00f2ff;
+            --server-b: #ff007f;
+            --panel: rgba(13, 17, 23, 0.9);
+            --border: #21262d;
+            --text: #e6edf3;
+            --text-dim: #8b949e;
+            --grid: rgba(0, 242, 255, 0.05);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Outfit', sans-serif;
+            overflow-x: hidden;
+            background-image: 
+                linear-gradient(var(--grid) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        .monospace { font-family: 'JetBrains Mono', monospace; }
+
+        /* Top Bar */
+        header {
+            height: 60px;
+            background: rgba(1, 4, 9, 0.9);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 30px;
+            justify-content: space-between;
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .status-pill {
+            background: rgba(0, 255, 0, 0.1);
+            color: #3fb950;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            border: 1px solid rgba(63, 185, 80, 0.3);
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        /* Hero: The Server Connection */
+        .sync-chamber {
+            max-width: 1400px;
+            margin: 40px auto;
+            padding: 0 20px;
+            display: grid;
+            grid-template-columns: 300px 1fr 300px;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .server-rack {
+            background: var(--panel);
+            border: 2px solid var(--border);
+            border-radius: 15px;
+            padding: 20px;
+            height: 450px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .server-rack.her { border-color: var(--server-a); box-shadow: 0 0 20px rgba(0, 242, 255, 0.1); }
+        .server-rack.him { border-color: var(--server-b); box-shadow: 0 0 20px rgba(255, 0, 127, 0.1); }
+
+        .rack-head {
+            font-size: 0.8rem;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-dim);
+        }
+
+        .rack-leds {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .led {
+            height: 4px;
+            background: #161b22;
+            border-radius: 2px;
+        }
+
+        .led.active-a { background: var(--server-a); box-shadow: 0 0 5px var(--server-a); }
+        .led.active-b { background: var(--server-b); box-shadow: 0 0 5px var(--server-b); }
+
+        .connection-canvas-container {
+            height: 450px;
+            position: relative;
+            background: radial-gradient(circle at center, rgba(0, 242, 255, 0.03) 0%, transparent 70%);
+        }
+
+        #sync-canvas { width: 100%; height: 100%; }
+
+        /* Dashboard Content */
+        .content-grid {
+            max-width: 1400px;
+            margin: 0 auto 60px;
+            padding: 0 20px;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 24px;
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            transition: 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card:hover { border-color: rgba(255, 255, 255, 0.2); }
+
+        .card-title {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        /* Gallery - Improved Heights */
+        .s3-bucket {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 15px;
+        }
+
+        .object-asset {
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            position: relative;
+            height: 300px; /* Fixed container height */
+        }
+
+        .object-asset img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center 25%; /* Frame faces better */
+            opacity: 0.85;
+            transition: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .object-asset:hover img { 
+            opacity: 1; 
+            transform: scale(1.08); 
+        }
+
+        .object-asset::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        /* Terminal Console */
+        .console-box {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .console-header {
+            background: #161b22;
+            padding: 8px 15px;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .console-body {
+            padding: 15px;
+            height: 250px;
+            overflow-y: auto;
+            font-size: 0.85rem;
+            line-height: 1.6;
+        }
+
+        .input-area {
+            display: flex;
+            padding: 10px 15px;
+            background: #010409;
+            border-top: 1px solid var(--border);
+        }
+
+        .input-area input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--server-a);
+            outline: none;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Romantic Thoughts Styles */
+        .thoughts-container {
+            grid-column: span 2;
+            background: linear-gradient(45deg, rgba(255, 0, 127, 0.05), transparent);
+            border: 1px solid rgba(255, 0, 127, 0.2);
+        }
+
+        .thought-item {
+            border-left: 2px solid var(--server-b);
+            padding: 12px 20px;
+            margin-bottom: 15px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 0 4px 4px 0;
+            font-style: italic;
+            color: var(--text);
+            line-height: 1.5;
+        }
+
+        /* Heartbeat */
+        @keyframes pulse {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; }
+            100% { opacity: 0.4; }
+        }
+        .heartbeat {
+            width: 10px;
+            height: 10px;
+            background: #ff007f;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            box-shadow: 0 0 10px #ff007f;
+            animation: pulse 1.5s infinite;
+        }
+
+        /* Pipeline Steps */
+        .pipeline-step {
+            padding: 15px;
+            border-left: 2px solid #30363d;
+            margin-bottom: 10px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 0 6px 6px 0;
+            position: relative;
+        }
+
+        .pipeline-step.success { border-left-color: #3fb950; }
+        .pipeline-step.running { border-left-color: var(--server-a); }
+
+        .step-tag {
+            font-size: 0.6rem;
+            color: var(--text-dim);
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        .sync-btn {
+            background: var(--server-a);
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+            transition: 0.3s;
+        }
+
+        .sync-btn:hover {
+            box-shadow: 0 0 20px var(--server-a);
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 900px) {
+            .sync-chamber { grid-template-columns: 1fr; }
+            .content-grid { grid-template-columns: 1fr; }
+            .thoughts-container { grid-column: span 1; }
+        }
+
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@^1.40.0",
+    "react": "https://esm.sh/react@^19.2.4",
+    "react/": "https://esm.sh/react@^19.2.4/"
+  }
+}
+</script>
+</head>
+<body>
+    <header>
+        <div class="monospace" style="font-weight: 700;">
+            <span style="color: var(--server-a);">HER_SERVER</span>
+            <span style="color: var(--text-dim); margin: 0 10px;">::</span>
+            <span style="color: var(--server-b);">HIS_SERVER</span>
+        </div>
+        <div style="display: flex; gap: 20px; align-items: center;">
+            <div class="status-pill monospace">Cluster Health: Optimized</div>
+            <div class="monospace" style="font-size: 0.7rem;">UPTIME: <span id="uptime-val">000:00:00:00</span></div>
+        </div>
+    </header>
+
+    <main>
+        <!-- The Connection Chamber -->
+        <section class="sync-chamber">
+            <div class="server-rack her">
+                <div class="rack-head monospace"><span>NODE_01: SHE</span><span>ACTIVE</span></div>
+                <div class="rack-leds" id="leds-her"></div>
+                <div style="flex-grow: 1; font-size: 0.75rem; color: var(--text-dim);">
+                    <p class="monospace">> Initializing emotional handshake...</p>
+                    <p class="monospace">> Buffer status: Overflowing</p>
+                    <p class="monospace">> Primary connection: 100% stable</p>
+                </div>
+                <div class="monospace" style="font-size: 3rem; color: var(--server-a); opacity: 0.2; position: absolute; bottom: 10px; right: 10px;">01</div>
+            </div>
+
+            <div class="connection-canvas-container">
+                <canvas id="sync-canvas"></canvas>
+                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+                    <div class="heartbeat"></div>
+                    <div class="monospace" style="font-size: 0.65rem; color: var(--text-dim); margin-top: 10px;">DATA_SYNC_IN_PROGRESS</div>
+                </div>
+            </div>
+
+            <div class="server-rack him">
+                <div class="rack-head monospace"><span>NODE_02: HE</span><span>ACTIVE</span></div>
+                <div class="rack-leds" id="leds-him"></div>
+                <div style="flex-grow: 1; font-size: 0.75rem; color: var(--text-dim);">
+                    <p class="monospace">> Receiver ready...</p>
+                    <p class="monospace">> Syncing memories...</p>
+                    <p class="monospace">> Integrity check: Flawless</p>
+                </div>
+                <div class="monospace" style="font-size: 3rem; color: var(--server-b); opacity: 0.2; position: absolute; bottom: 10px; right: 10px;">02</div>
+            </div>
+        </section>
+
+        <div class="content-grid">
+            <div class="left-col">
+                <!-- Memory Bucket -->
+                <section class="card">
+                    <span class="card-title monospace">Object_Storage: /mnt/memories</span>
+                    <div class="s3-bucket" id="photo-gallery">
+                        <!-- Photos injected -->
+                    </div>
+                </section>
+
+                <!-- Console -->
+                <section class="console-box" style="margin-top: 24px;">
+                    <div class="console-header monospace">
+                        <span>Terminal v2.14.0 (Cloud_Love_CLI)</span>
+                        <span>Connection: TLS v1.3</span>
+                    </div>
+                    <div class="console-body monospace" id="cli-output">
+                        Welcome to the High-Availability Heartbeat Console.<br>
+                        Establishing peer-to-peer connection... [DONE]<br>
+                        Ready for memory deployment.<br>
+                    </div>
+                    <div class="input-area">
+                        <span class="monospace" style="color: var(--server-a); margin-right: 10px;">root@love-ops:~$</span>
+                        <input type="text" id="cli-input" placeholder="Type a message to initiate data transfer..." autocomplete="off">
+                    </div>
+                </section>
+            </div>
+
+            <div class="right-col">
+                <!-- Pipeline -->
+                <section class="card">
+                    <span class="card-title monospace">Valentine_Deployment_Pipeline</span>
+                    <div id="pipeline-container">
+                        <!-- Steps injected -->
+                    </div>
+                    <button class="sync-btn" id="force-sync">FORCE FULL SYNC</button>
+                </section>
+                
+                <!-- System Stats -->
+                <section class="card" style="margin-top: 24px;">
+                    <span class="card-title monospace">System_Reliability_Score</span>
+                    <div style="display: flex; align-items: baseline; gap: 10px;">
+                        <span style="font-size: 2.5rem; font-weight: 700; color: #3fb950;">99.999%</span>
+                        <span class="monospace" style="font-size: 0.7rem; color: var(--text-dim);">UPTIME_GUARANTEE</span>
+                    </div>
+                    <div style="margin-top: 15px; height: 4px; background: #161b22; border-radius: 2px; overflow: hidden;">
+                        <div style="width: 100%; height: 100%; background: #3fb950; box-shadow: 0 0 10px #3fb950;"></div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Romantic Thoughts / System Policy -->
+            <section class="card thoughts-container" style="margin-top: 24px;">
+                <span class="card-title monospace">System_Policy: Romantic_Guidelines.cfg</span>
+                <div id="romantic-thoughts">
+                    <!-- Thoughts injected -->
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script type="module" src="index.tsx"></script>
+</body>
+</html>
